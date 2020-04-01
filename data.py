@@ -1,7 +1,7 @@
 import json
 import torch
 from torch.utils.data import Dataset, DataLoader
-from torch.nn.utils.rnn import pack_sequence
+from torch.nn.utils.rnn import pack_sequence, pad_sequence
 from collections import Counter
 from datetime import datetime
 
@@ -67,23 +67,23 @@ class ByteWrapper:
 
 class ByteDataset(Dataset):
 
-    def __init__(self, fname, one_hot=True):
+    def __init__(self, fname):
         """fname = path to json db
             one_hot: whether to yield byte values as one-hot"""
         super().__init__()
         self.fname = fname
-        self.one_hot = one_hot
         self._strds = StringDataset(fname)
         self._bytecodes = ByteWrapper(self._strds)
     
     def __getitem__(self, i):
+        """Returns (seq_len, num_code) one hot float tensor and (seq_ln) int tensor."""
         bts = self._bytecodes[i]
-        if self.one_hot:
-            t = torch.zeros(len(bts), self._bytecodes.num_codes, dtype=torch.float)
-            t[range(len(bts)), bts] = 1
-        else:
-            t = torch.tensor(self._bytecodes[i], dtype=torch.long)
-        return t
+        
+        t_onehot = torch.zeros(len(bts), self._bytecodes.num_codes, dtype=torch.float)
+        t_onehot[range(len(bts)), bts] = 1
+        
+        t = torch.tensor(self._bytecodes[i], dtype=torch.long)
+        return t_onehot, t
     
     def __len__(self):
         return len(self._bytecodes)
@@ -96,9 +96,13 @@ class ByteDataLoader(DataLoader):
     """Loads packed sequences of integer codes for each batch."""
 
     def __init__(self, byte_ds, **kwargs):
-        if not byte_ds.one_hot:
-            raise ValueError
-        super().__init__(byte_ds, collate_fn=lambda t: pack_sequence(t, enforce_sorted=False), 
+        def collate(item_list):
+            """item list: a list of (one_hot, int) seq tuples"""
+            packed_onehot = pack_sequence([t[0] for t in item_list], enforce_sorted=False)
+            padded_ints = pad_sequence([t[1] for t in item_list])
+            return packed_onehot, padded_ints
+
+        super().__init__(byte_ds, collate_fn=collate, 
                                 **kwargs)
     
 

@@ -15,7 +15,9 @@ class RNN(nn.Module):
         self.dropout = dropout
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers=num_layers,
                                 dropout=dropout)
-        self.linear = nn.Linear(input_size, hidden_size)
+        self.linear = nn.Linear(hidden_size, input_size)
+        
+
 
     def forward(self, x):
         #outputs at top of LSTM stack
@@ -23,10 +25,10 @@ class RNN(nn.Module):
         if isinstance(y, PackedSequence):
             #y is now (max_seqln, batch_size, hidden_size) tensor
             y, lengths = pad_packed_sequence(y)
-            logits = self.linear(y)
+            logits = self.linear(y).permute(1, 2, 0)
             return logits, lengths
         else:
-            logits = self.linear(y)
+            logits = self.linear(y).permute(1, 2, 0)
             return logits
 
     
@@ -37,6 +39,14 @@ if __name__ == "__main__":
     dl = ByteDataLoader(ds, batch_size=2)
     rnn= RNN()
     rnn.train()
-    batch = next(iter(dl))
-    y = rnn(batch)
+    onehot, target= next(iter(dl))
+    target = target.permute(1, 0)
+    lossfn = nn.CrossEntropyLoss(reduction='none')
+    logits, lengths = rnn(onehot)
+    loss = lossfn(logits, target)
+    for i in range(len(lengths)):
+        loss[i, lengths[i]:] = 0
+    loss = loss.mean()
+    loss.backward()
+
 
