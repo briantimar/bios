@@ -31,20 +31,6 @@ class RNN(nn.Module):
             return logits
 
 
-if __name__ == "__main__":
-    fname = "bios.json"
-    ds = ByteDataset(fname)
-    dl = ByteDataLoader(ds, batch_size=2)
-    rnn= RNN()
-    rnn.train()
-    onehot, target= next(iter(dl))
-    target = target.permute(1, 0)
-    lossfn = nn.CrossEntropyLoss(reduction='none')
-    logits, lengths = rnn(onehot)
-    loss = lossfn(logits, target)
-    for i in range(len(lengths)):
-        loss[i, lengths[i]:] = 0
-    loss = loss.mean()
-    loss.backward()
+  
 
 

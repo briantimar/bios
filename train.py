@@ -26,7 +26,7 @@ if __name__ == "__main__":
             t0 = time.time()
             target = target.permute(1, 0)
             logits, lengths = rnn(onehot)
-            loss = lossfn(logits, target)
+            loss = lossfn(logits[:-1], target[1:])
             for i in range(len(lengths)):
                 loss[i, lengths[i]:] = 0
             loss = loss.mean()
