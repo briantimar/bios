@@ -18,7 +18,6 @@ class RNN(nn.Module):
         self.linear = nn.Linear(hidden_size, input_size)
         
 
-
     def forward(self, x):
         #outputs at top of LSTM stack
         y = self.lstm(x)[0]
@@ -31,7 +30,6 @@ class RNN(nn.Module):
             logits = self.linear(y).permute(1, 2, 0)
             return logits
 
-    
 
 if __name__ == "__main__":
     fname = "bios.json"
