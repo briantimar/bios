@@ -1,6 +1,7 @@
 import json
 from collections import Counter
 from datetime import datetime
+import numpy as np
 
 def write_character_stats(bios):
     chars = Counter()
@@ -25,10 +26,12 @@ def write_character_stats(bios):
 def write_byte_stats(bios):
 
     bts = Counter()
+    lens = []
     for b in bios:
-        for c in b:
-            for bt in c.encode():
-                bts[bt] += 1
+        bytestring = b.encode()
+        lens.append(len(bytestring))
+        for bt in bytestring:
+            bts[bt] += 1
     
     srted_bytes = sorted(bts.items(), key=lambda t: -t[1])
 
@@ -38,6 +41,7 @@ def write_byte_stats(bios):
         f.write(str(datetime.now()) + '\n')
         f.write(f"Source: {src}\n")
         f.write(f"Bio count: {len(bios)}\n")
+        f.write(f"Mean, med, max byte length = {np.mean(lens):.3f}, {np.median(lens):.3f}, {max(lens)}\n")
         f.write(f"Num unique bytes: {len(bts)}\n")
         f.write(f"Total tokens: {sum(bts.values())}\n")
         f.write(f"Byte, count-----\n")
@@ -51,7 +55,7 @@ def write_byte_stats(bios):
 
 if __name__ == "__main__":
     src = "bios.json"
-    # with open(src) as f:
-    #     bios = json.load(f)
-    # write_byte_stats(list(bios.values()))
+    with open(src) as f:
+        bios = json.load(f)
+    write_byte_stats(list(bios.values()))
     # ds = StringDataset(src)
