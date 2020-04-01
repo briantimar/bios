@@ -1,5 +1,7 @@
 import json
+import torch
 from torch.utils.data import Dataset, DataLoader
+from torch.nn.utils.rnn import pack_sequence
 from collections import Counter
 from datetime import datetime
 
@@ -26,7 +28,7 @@ class ByteWrapper:
     """Yields bytestrings terminated with a STOP value"""
     
     STOP_CODE = 205
-    START_CODE = 206
+    START_CODE = 204
 
     def __init__(self, string_dataset):
         """fname = path to db file."""
@@ -38,7 +40,7 @@ class ByteWrapper:
         with open(fname) as f:
             bytes_list = f.readline().split(',')
         bytes_list = [int(b.strip()) for b in bytes_list]
-        assert len(bytes_list) == self.STOP_CODE-1
+        assert len(bytes_list) == self.num_codes -2
         self._bytes_list = bytes_list
         self._byte_value_map = {bytes_list[i]: i for i in range(len(bytes_list))}
 
@@ -58,17 +60,30 @@ class ByteWrapper:
     def __getitem__(self, i):
         return self._to_int_seq(self.string_dataset[i])
 
+    @property
+    def num_codes(self):
+        """number of byte codes including start and stop."""
+        return self.STOP_CODE + 1
+
 class ByteDataset(Dataset):
 
-    def __init__(self, fname):
-        """fname = path to json db"""
+    def __init__(self, fname, one_hot=True):
+        """fname = path to json db
+            one_hot: whether to yield byte values as one-hot"""
         super().__init__()
         self.fname = fname
+        self.one_hot = one_hot
         self._strds = StringDataset(fname)
         self._bytecodes = ByteWrapper(self._strds)
     
     def __getitem__(self, i):
-        return self._bytecodes[i]
+        bts = self._bytecodes[i]
+        if self.one_hot:
+            t = torch.zeros(len(bts), self._bytecodes.num_codes, dtype=torch.float)
+            t[range(len(bts)), bts] = 1
+        else:
+            t = torch.tensor(self._bytecodes[i], dtype=torch.long)
+        return t
     
     def __len__(self):
         return len(self._bytecodes)
@@ -76,6 +91,17 @@ class ByteDataset(Dataset):
     def string(self, bytecodes):
         """Returns string corresponding to a list of bytecodes."""
         return self._bytecodes._to_string(bytecodes)
+
+class ByteDataLoader(DataLoader):
+    """Loads packed sequences of integer codes for each batch."""
+
+    def __init__(self, byte_ds, **kwargs):
+        if not byte_ds.one_hot:
+            raise ValueError
+        super().__init__(byte_ds, collate_fn=lambda t: pack_sequence(t, enforce_sorted=False), 
+                                **kwargs)
+    
+
 
 if __name__ == "__main__":
     bds = ByteDataset("bios.json")
