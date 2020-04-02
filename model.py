@@ -7,11 +7,11 @@ from torch.distributions import Categorical
 class RNN(nn.Module):
     """recurrent character-level model."""
 
-    def __init__(self, hidden_size=256, input_size=206, num_layers=3, dropout=.5):
+    def __init__(self, input_size, hidden_size=256, num_layers=3, dropout=.5):
         super().__init__()
+        self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.input_size = input_size
         self.num_layers = num_layers
         self.dropout = dropout
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers=num_layers,
@@ -19,6 +19,7 @@ class RNN(nn.Module):
         self.linear = nn.Linear(hidden_size, input_size)
 
     def forward(self, x):
+        """x : a tensor of integer bytecodes."""
         #outputs at top of LSTM stack
         y = self.lstm(x)[0]
         if isinstance(y, PackedSequence):
@@ -59,9 +60,8 @@ class RNN(nn.Module):
             returns: list whose ith element is the cell of the ith layer."""
         return [self._get_cell(i, device=device) for i in range(self.num_layers)]
 
-    def sample(self, start_token, stop_token, maxlen=400, temperature=1.0):
+    def sample(self, stop_token, maxlen=400, temperature=1.0):
         """Sample a string of bytecodes from the model distribution. Sampling halts 
-        when a STOP token is hit.
         start_token, int: token with which to start the string; fed into leftmost cell
         stop_token, int: token upon receipt of which sampling halts.
         maxlen = max allowed sample length.
@@ -71,21 +71,18 @@ class RNN(nn.Module):
         """
         if temperature <= 0:
             raise ValueError("Temperature must be positive")
-        if not (0<= start_token < self.input_size):
-            raise ValueError(f"Not a valid start token: {start_token}")
-
         if not (0<= stop_token < self.input_size):
-            raise ValueError(f"Not a valid start token: {stop_token}")
+            raise ValueError(f"Not a valid stop token: {stop_token}")
 
         cells = self.get_cells()
         
-        output = start_token
+        output = stop_token
         bytestring = [output]
         #track the hidden and cell states at each sequence step
         # they default to zero in the pytorch impl, so can start as None
         h = [None] * self.num_layers
         c = [None] * self.num_layers
-        while len(bytestring) < maxlen - 1 and output != stop_token:
+        while len(bytestring) < maxlen - 1 and (len(bytestring)==1) or (output != stop_token):
             #feed previous output as input
             inp = torch.zeros((1,self.input_size,), dtype=torch.float)
             inp[0,output] = 1
@@ -112,9 +109,11 @@ class RNN(nn.Module):
 
 
 if __name__ == "__main__":
-    model = RNN()
-    start, stop = 204, 205
-    b = model.sample(start, stop, maxlen=10)
+    from data import ByteCode
+    byte_code = ByteCode("byte_values.txt")
+    model = RNN(input_size=byte_code.num_codes)
+    b = model.sample(byte_code.STOP_CODE, maxlen=400)
+    print(byte_code.to_string(b))
 
   
 

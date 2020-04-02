@@ -26,8 +26,7 @@ class StringDataset:
 class ByteCode:
     """Wrapper around byte codes: converts from integer codes to strings."""
 
-    STOP_CODE = 205
-    START_CODE = 204
+    STOP_CODE = 204
 
     def __init__(self, fname):
         """fname = path to byte code csv."""
@@ -39,14 +38,14 @@ class ByteCode:
         with open(fname) as f:
             bytes_list = f.readline().split(',')
         bytes_list = [int(b.strip()) for b in bytes_list]
-        assert len(bytes_list) == self.num_codes -2
+        assert len(bytes_list) == self.num_codes -1
         self._bytes_list = bytes_list
         self._byte_value_map = {bytes_list[i]: i for i in range(len(bytes_list))}
 
     def to_int_seq(self, s):
         """Given a string s, returns corresponding list of integer codes and appends a STOP
         code on the end."""
-        return [self.START_CODE] + [self._byte_value_map[b] for b in s.encode()] + [self.STOP_CODE]
+        return [self.STOP_CODE] + [self._byte_value_map[b] for b in s.encode()] + [self.STOP_CODE]
 
     def to_string(self, int_seq):
         """Given int seq terminated in STOP, return decoded string."""
@@ -55,15 +54,12 @@ class ByteCode:
 
     @property
     def num_codes(self):
-        """number of byte codes including start and stop."""
+        """number of byte codes including stop."""
         return self.STOP_CODE + 1
 
 class ByteWrapper:
     """Yields bytestrings terminated with a STOP value"""
     
-    STOP_CODE = 205
-    START_CODE = 204
-
     def __init__(self, string_dataset, byte_code):
         """string_dataset = instance of StringDataset
         byte_code = instance of ByteCode"""
