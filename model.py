@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_packed_sequence, PackedSequence
 from data import ByteDataLoader, ByteDataset
+from torch.distributions import Categorical
 
 class RNN(nn.Module):
     """recurrent character-level model."""
@@ -16,7 +17,6 @@ class RNN(nn.Module):
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers=num_layers,
                                 dropout=dropout)
         self.linear = nn.Linear(hidden_size, input_size)
-        
 
     def forward(self, x):
         #outputs at top of LSTM stack
@@ -30,6 +30,91 @@ class RNN(nn.Module):
             logits = self.linear(y).permute(1, 2, 0)
             return logits
 
+    def _get_weights(self, i):
+        """Get weights for the cell of layer i.
+            Does not copy!"""
+        return {'weight_ih': getattr(self.lstm, f"weight_ih_l{i}"), 
+                'weight_hh': getattr(self.lstm, f"weight_hh_l{i}"), 
+                'bias_ih': getattr(self.lstm, f"bias_ih_l{i}"), 
+                'bias_hh': getattr(self.lstm, f"bias_hh_l{i}")}
+
+    def _get_cell(self, i, device=None):
+        """ Returns LSTM cell module loaded with weights from the ith LSTM layer.
+            Device is same as the model."""
+        if not (0<= i < self.num_layers):
+            raise ValueError(f"invalid layer index {i}")
+        if i == 0:
+            cell = nn.LSTMCell(self.input_size, self.hidden_size)
+        else:
+            cell = nn.LSTMCell(self.hidden_size, self.hidden_size)
+        wts = self._get_weights(i)
+        for wt in wts:
+            getattr(cell, wt).data.copy_(wts[wt].data)
+        if device is None:
+            device = wts[wt].device
+        return cell.to(device=device)
+
+    def get_cells(self, device=None):
+        """ Copies lstm params into a list of LSTM cells.
+            returns: list whose ith element is the cell of the ith layer."""
+        return [self._get_cell(i, device=device) for i in range(self.num_layers)]
+
+    def sample(self, start_token, stop_token, maxlen=400, temperature=1.0):
+        """Sample a string of bytecodes from the model distribution. Sampling halts 
+        when a STOP token is hit.
+        start_token, int: token with which to start the string; fed into leftmost cell
+        stop_token, int: token upon receipt of which sampling halts.
+        maxlen = max allowed sample length.
+        temperature: scaling factor by which the logits are divided prior to sampling. A low 
+        temperature makes samping converge on most likely characters.
+        returns: a list of integer bytecodes
+        """
+        if temperature <= 0:
+            raise ValueError("Temperature must be positive")
+        if not (0<= start_token < self.input_size):
+            raise ValueError(f"Not a valid start token: {start_token}")
+
+        if not (0<= stop_token < self.input_size):
+            raise ValueError(f"Not a valid start token: {stop_token}")
+
+        cells = self.get_cells()
+        
+        output = start_token
+        bytestring = [output]
+        #track the hidden and cell states at each sequence step
+        # they default to zero in the pytorch impl, so can start as None
+        h = [None] * self.num_layers
+        c = [None] * self.num_layers
+        while len(bytestring) < maxlen - 1 and output != stop_token:
+            #feed previous output as input
+            inp = torch.zeros((1,self.input_size,), dtype=torch.float)
+            inp[0,output] = 1
+            for i in range(self.num_layers):
+                # at the first timestep
+                if h[i] is None:
+                    h[i], c[i] = cells[i](inp)
+                # at all subsequent
+                else:
+                    h[i], c[i] = cells[i](inp, (h[i], c[i]))
+                inp = h[i]
+
+            # apply linear to the upper hidden state and sample from the byte distribution.
+            logits = self.linear(h[self.num_layers-1]) / temperature
+            output = Categorical(logits=logits).sample().item()
+            bytestring.append(output)
+
+        if len(bytestring) == maxlen - 1:
+            print(f"Warning - max length {maxlen} reached")
+            if bytestring[-1] != stop_token:
+                bytestring.append(stop_token)
+
+        return bytestring
+
+
+if __name__ == "__main__":
+    model = RNN()
+    start, stop = 204, 205
+    b = model.sample(start, stop, maxlen=10)
 
   
 
