@@ -59,6 +59,11 @@ class RNN(nn.Module):
         """ Copies lstm params into a list of LSTM cells.
             returns: list whose ith element is the cell of the ith layer."""
         return [self._get_cell(i, device=device) for i in range(self.num_layers)]
+    
+    @property
+    def device(self):
+        """current weight device."""
+        return self.linear.weight.device
 
     def sample(self, stop_token, maxlen=400, temperature=1.0):
         """Sample a string of bytecodes from the model distribution. Sampling halts 
@@ -78,14 +83,20 @@ class RNN(nn.Module):
         
         output = stop_token
         bytestring = [output]
+        #record the uncertainty in the model output at each step.
+        entropies = []
+        #and the probability of the selected output
+        probs_sampled = []
         #track the hidden and cell states at each sequence step
         # they default to zero in the pytorch impl, so can start as None
         h = [None] * self.num_layers
         c = [None] * self.num_layers
-        while len(bytestring) < maxlen - 1 and (len(bytestring)==1) or (output != stop_token):
+        while len(bytestring) < maxlen - 1 and (len(bytestring)==1 or (output != stop_token)):
             #feed previous output as input
             inp = torch.zeros((1,self.input_size,), dtype=torch.float)
             inp[0,output] = 1
+            inp=inp.to(device=self.device)
+            
             for i in range(self.num_layers):
                 # at the first timestep
                 if h[i] is None:
@@ -96,23 +107,27 @@ class RNN(nn.Module):
                 inp = h[i]
 
             # apply linear to the upper hidden state and sample from the byte distribution.
-            logits = self.linear(h[self.num_layers-1]) / temperature
+            
+            logits = self.linear(h[self.num_layers-1]).squeeze() / temperature
+            probs = logits.softmax(0)
+            entropies.append(-(probs * probs.log2()).sum().item())
             output = Categorical(logits=logits).sample().item()
             bytestring.append(output)
+            probs_sampled.append(probs[output].item())
 
         if len(bytestring) == maxlen - 1:
             print(f"Warning - max length {maxlen} reached")
             if bytestring[-1] != stop_token:
                 bytestring.append(stop_token)
 
-        return bytestring
+        return bytestring, probs_sampled, entropies
 
 
 if __name__ == "__main__":
     from data import ByteCode
     byte_code = ByteCode("byte_values.txt")
     model = RNN(input_size=byte_code.num_codes)
-    b = model.sample(byte_code.STOP_CODE, maxlen=400)
+    b,p,e = model.sample(byte_code.STOP_CODE, maxlen=20)
     print(byte_code.to_string(b))
 
   
