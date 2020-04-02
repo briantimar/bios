@@ -84,17 +84,19 @@ class ByteWrapper:
     @property
     def num_codes(self):
         """number of byte codes including start and stop."""
-        return self.STOP_CODE + 1
+        return self.byte_code.num_codes
 
 class ByteDataset(Dataset):
 
-    def __init__(self, fname):
+    def __init__(self, fname, byte_code):
         """fname = path to json db
-            one_hot: whether to yield byte values as one-hot"""
+            byte_code: instance of ByteCode
+            """
         super().__init__()
         self.fname = fname
+        self.byte_code = byte_code
         self._strds = StringDataset(fname)
-        self._bytecodes = ByteWrapper(self._strds)
+        self._bytecodes = ByteWrapper(self._strds, self.byte_code)
     
     def __getitem__(self, i):
         """Returns (seq_len, num_code) one hot float tensor and (seq_ln) int tensor."""
