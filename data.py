@@ -23,18 +23,17 @@ class StringDataset:
     def __getitem__(self, i):
         return self.bios[i]
 
+class ByteCode:
+    """Wrapper around byte codes: converts from integer codes to strings."""
 
-class ByteWrapper:
-    """Yields bytestrings terminated with a STOP value"""
-    
     STOP_CODE = 205
     START_CODE = 204
 
-    def __init__(self, string_dataset):
-        """fname = path to db file."""
-        self.string_dataset = string_dataset
+    def __init__(self, fname):
+        """fname = path to byte code csv."""
+        self.fname = fname
         self._get_byte_values()
-
+    
     def _get_byte_values(self, fname="byte_values.txt"):
         """Returns dict mapping bytes to consecutive integer indices."""
         with open(fname) as f:
@@ -44,18 +43,44 @@ class ByteWrapper:
         self._bytes_list = bytes_list
         self._byte_value_map = {bytes_list[i]: i for i in range(len(bytes_list))}
 
+    def to_int_seq(self, s):
+        """Given a string s, returns corresponding list of integer codes and appends a STOP
+        code on the end."""
+        return [self.START_CODE] + [self._byte_value_map[b] for b in s.encode()] + [self.STOP_CODE]
+
+    def to_string(self, int_seq):
+        """Given int seq terminated in STOP, return decoded string."""
+        bts = [self._bytes_list[i] for i in int_seq[1:-1]]
+        return bytes(bts).decode(errors="replace")
+
+    @property
+    def num_codes(self):
+        """number of byte codes including start and stop."""
+        return self.STOP_CODE + 1
+
+class ByteWrapper:
+    """Yields bytestrings terminated with a STOP value"""
+    
+    STOP_CODE = 205
+    START_CODE = 204
+
+    def __init__(self, string_dataset, byte_code):
+        """string_dataset = instance of StringDataset
+        byte_code = instance of ByteCode"""
+        self.string_dataset = string_dataset
+        self.byte_code = byte_code
+
     def __len__(self):
         return len(self.string_dataset)
     
     def _to_int_seq(self, s):
         """Given a string s, returns corresponding list of integer codes and appends a STOP
         code on the end."""
-        return [self.START_CODE] + [self._byte_value_map[b] for b in s.encode()] + [self.STOP_CODE]
+        return self.byte_code.to_int_seq(s)
 
     def _to_string(self, int_seq):
         """Given int seq terminated in STOP, return decoded string."""
-        bts = [self._bytes_list[i] for i in int_seq[1:-1]]
-        return bytes(bts).decode(errors="replace")
+        return self.byte_code.to_string(int_seq)
 
     def __getitem__(self, i):
         return self._to_int_seq(self.string_dataset[i])
