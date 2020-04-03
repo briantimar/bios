@@ -11,6 +11,17 @@ class TestByteCode(unittest.TestCase):
             self.assertEqual(indices[-1], bc.STOP_CODE)
             self.assertEqual(ds[i], bc.to_string(indices))
 
+    def test_to_int_seq(self):
+        s = ' '
+        bc = ByteCode("byte_values.txt")
+        self.assertEqual(bc.to_int_seq(s), [bc.STOP_CODE, bc._byte_value_map[32], bc.STOP_CODE])
+
+    def test__to_code(self):
+        bc = ByteCode("byte_values.txt")
+        not_a_byteval = -3
+        self.assertEqual(bc._to_code(not_a_byteval), bc._byte_value_map[bc.MISSING])
+
+
 
 if __name__ == "__main__":
     unittest.main()

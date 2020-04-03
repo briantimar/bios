@@ -26,11 +26,13 @@ class StringDataset:
 class ByteCode:
     """Wrapper around byte codes: converts from integer codes to strings."""
 
-    STOP_CODE = 204
+   
+    MISSING = b' '[0]
 
     def __init__(self, fname):
         """fname = path to byte code csv."""
         self.fname = fname
+        self.STOP_CODE = None
         self._get_byte_values()
     
     def _get_byte_values(self, fname="byte_values.txt"):
@@ -38,14 +40,21 @@ class ByteCode:
         with open(fname) as f:
             bytes_list = f.readline().split(',')
         bytes_list = [int(b.strip()) for b in bytes_list]
-        assert len(bytes_list) == self.num_codes -1
+        self.STOP_CODE = len(bytes_list)
         self._bytes_list = bytes_list
         self._byte_value_map = {bytes_list[i]: i for i in range(len(bytes_list))}
+
+    def _to_code(self, b):
+        """returns code for a given byte value.
+            If not in byte value map, returns code of MISSING"""
+        if b not in self._byte_value_map:
+            return self._byte_value_map[self.MISSING]
+        return self._byte_value_map[b]
 
     def to_int_seq(self, s):
         """Given a string s, returns corresponding list of integer codes and appends a STOP
         code on the end."""
-        return [self.STOP_CODE] + [self._byte_value_map[b] for b in s.encode()] + [self.STOP_CODE]
+        return [self.STOP_CODE] + [self._to_code(b) for b in s.encode()] + [self.STOP_CODE]
 
     def to_string(self, int_seq):
         """Given int seq terminated in STOP, return decoded string."""
