@@ -33,9 +33,9 @@ class ByteCode:
         """fname = path to byte code csv."""
         self.fname = fname
         self.STOP_CODE = None
-        self._get_byte_values()
+        self._get_byte_values(self.fname)
     
-    def _get_byte_values(self, fname="byte_values.txt"):
+    def _get_byte_values(self):
         """Returns dict mapping bytes to consecutive integer indices."""
         with open(fname) as f:
             bytes_list = f.readline().split(',')
