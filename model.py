@@ -109,7 +109,8 @@ class RNN(nn.Module):
             # apply linear to the upper hidden state and sample from the byte distribution.
             
             logits = self.linear(h[self.num_layers-1]).squeeze() / temperature
-            probs = logits.softmax(0)
+            probs = logits.softmax(0).detach()
+            probs[probs<1e-12] = 1e-12
             entropies.append(-(probs * probs.log2()).sum().item())
             output = Categorical(logits=logits).sample().item()
             bytestring.append(output)
