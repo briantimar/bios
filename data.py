@@ -97,13 +97,15 @@ class ByteWrapper:
 
 class ByteDataset(Dataset):
 
-    def __init__(self, fname, byte_code):
+    def __init__(self, fname, byte_code, device=None):
         """fname = path to json db
             byte_code: instance of ByteCode
+            device: if not None, where to place tensors
             """
         super().__init__()
         self.fname = fname
         self.byte_code = byte_code
+        self.device = device
         self._strds = StringDataset(fname)
         self._bytecodes = ByteWrapper(self._strds, self.byte_code)
     
@@ -115,6 +117,9 @@ class ByteDataset(Dataset):
         t_onehot[range(len(bts)), bts] = 1
         
         t = torch.tensor(self._bytecodes[i], dtype=torch.long)
+        if self.device is not None:
+            t_onehot = t_onehot.to(device=self.device)
+            t = t.to(device=self.device)
         return t_onehot, t
     
     def __len__(self):
