@@ -135,6 +135,10 @@ class ByteDataLoader(DataLoader):
     def __init__(self, byte_ds, pack_onehot=False, **kwargs):
         """pack_onehot: if True, the (seqln, num_codes) input tensors will be packed together into a torch PackedSequence object.
             if False, they're left in a list.
+
+            Each batch consists of:
+                a list of (seq_ln, num_input) one-hot input tensors
+                a single, padded (batch_size, max_seq_ln) target tensor.
             """
         self.pack_onehot = pack_onehot
 
@@ -143,7 +147,7 @@ class ByteDataLoader(DataLoader):
             onehot = [t[0] for t in item_list]
             if self.pack_onehot:
                 onehot = pack_sequence(onehot, enforce_sorted=False)
-            padded_ints = pad_sequence([t[1] for t in item_list])
+            padded_ints = pad_sequence([t[1] for t in item_list], batch_first=True)
             return onehot, padded_ints
 
         super().__init__(byte_ds, collate_fn=collate, 
