@@ -100,7 +100,6 @@ class RNN(nn.Module):
         if not (0<= stop_token < self.input_size):
             raise ValueError(f"Not a valid stop token: {stop_token}")
 
-        cells = self.get_cells()
         
         output = stop_token
         bytestring = [output]
@@ -112,37 +111,37 @@ class RNN(nn.Module):
         # they default to zero in the pytorch impl, so can start as None
         h = [None] * self.num_layers
         c = [None] * self.num_layers
-        while len(bytestring) < maxlen - 1 and (len(bytestring)==1 or (output != stop_token)):
-            #feed previous output as input
-            inp = torch.zeros((1,self.input_size,), dtype=torch.float)
-            inp[0,output] = 1
-            inp=inp.to(device=self.device)
-            
-            for i in range(self.num_layers):
-                # at the first timestep
-                if h[i] is None:
-                    h[i], c[i] = cells[i](inp)
-                # at all subsequent
-                else:
-                    h[i], c[i] = cells[i](inp, (h[i], c[i]))
-                inp = h[i]
+        with torch.no_grad():
+            while len(bytestring) < maxlen - 1 and (len(bytestring)==1 or (output != stop_token)):
+                #feed previous output as input
+                inp = torch.zeros((1,self.input_size,), dtype=torch.float)
+                inp[0,output] = 1
+                inp=inp.to(device=self.device)
+                
+                for i in range(self.num_layers):
+                    # at the first timestep
+                    if h[i] is None:
+                        h[i], c[i] = self.cells[i](inp)
+                    # at all subsequent
+                    else:
+                        h[i], c[i] = self.cells[i](inp, (h[i], c[i]))
+                    inp = h[i]
 
-            # apply linear to the upper hidden state and sample from the byte distribution.
-            
-            logits = self.linear(h[self.num_layers-1]).squeeze() / temperature
-            probs = logits.softmax(0).detach()
-            probs[probs<1e-12] = 1e-12
-            entropies.append(-(probs * probs.log2()).sum().item())
-            output = Categorical(logits=logits).sample().item()
-            bytestring.append(output)
-            probs_sampled.append(probs[output].item())
+                # apply linear to the upper hidden state and sample from the byte distribution.
+                logits = self.linear(h[self.num_layers-1]).squeeze() / temperature
+                probs = logits.softmax(0).detach()
+                probs[probs<1e-12] = 1e-12
+                entropies.append(-(probs * probs.log2()).sum().item())
+                output = Categorical(logits=logits).sample().item()
+                bytestring.append(output)
+                probs_sampled.append(probs[output].item())
 
-        if len(bytestring) == maxlen - 1:
-            print(f"Warning - max length {maxlen} reached")
-            if bytestring[-1] != stop_token:
-                bytestring.append(stop_token)
+            if len(bytestring) == maxlen - 1:
+                print(f"Warning - max length {maxlen} reached")
+                if bytestring[-1] != stop_token:
+                    bytestring.append(stop_token)
 
-        return bytestring, probs_sampled, entropies
+            return bytestring, probs_sampled, entropies
 
 
 

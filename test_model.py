@@ -39,6 +39,14 @@ class TestRNN(unittest.TestCase):
         self.assertEqual(lens, sorted(lengths, key = lambda x: -x))
         self.assertEqual(logits.shape, (batch_size, input_size, max(lengths)))
 
+    def test_sample(self):
+        input_size =5
+        hidden_size = 32
+        rnn = RNN(input_size, hidden_size=hidden_size)
+        stop_token = 4
+        bytestring, probs, entropies = rnn.sample(stop_token, maxlen=20)
+        self.assertTrue(max(bytestring) < rnn.input_size)
+        self.assertTrue(min(bytestring) >= 0)
 
 
 if __name__ == "__main__":
