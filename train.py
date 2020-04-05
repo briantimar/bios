@@ -8,10 +8,29 @@ from datetime import datetime
 import os
 import time
 import json
+import numpy as np
+
+def score_set(model, dl, num_batch=None):
+    """returns list of batched log-probs."""
+    if num_batch is None:
+        num_batch = len(dl)
+    lps = []
+    lossfn = nn.CrossEntropyLoss(reduction='none')
+    model.eval()
+    for ib, (onehot, target) in enumerate(dl):
+        if ib == num_batch: break
+        logits, lengths = model(onehot)
+        loss = lossfn(logits[...,:-1], target[...,1:])
+        for i in range(len(lengths)):
+            loss[i, lengths[i]-1:] = 0
+        loss = loss.sum(dim=1).mean().item()
+        lps.append(loss)
+    return np.mean(lps)
+
 
 def train(dataloader, model, optimizer, params, device, 
-            byte_code):
-    """Train with the given model and optimizer under the setting prescribed in params.
+            byte_code, val_dl=None):
+    """Train with the given RNN model and optimizer under the setting prescribed in params.
         dataloader = ByteDataLoader instance
         model = RNN
         optimizer = instance of torch.optim with model params loaded.
@@ -23,13 +42,16 @@ def train(dataloader, model, optimizer, params, device,
     epochs = params["epochs"]
     expt_dir = params["expt_dir"]
     sample_step = params.get("sample_step", 100)
+    save_step = params.get("save_step", None)
+    num_val_batch = params.get("num_val_batch", 10)
+
     tstart = datetime.now()
     byte_samples = []
     string_samples = []
     probabilities = []
     entropies = []
     losses = []
-
+    val_losses = []
     lossfn = nn.CrossEntropyLoss(reduction='none')
 
     try:
@@ -59,17 +81,26 @@ def train(dataloader, model, optimizer, params, device,
                     string_samples.append(str_sample)
                     probabilities.append(probs)
                     entropies.append(entropy)
+                    if val_dl is not None:
+                        val_losses.append(score_set(model, val_dl, num_batch=num_val_batch))
                     print(f"Step {batch_index}, sample: {str_sample}")
                     print(f"recent loss: {loss:.3f}")
+                    if val_dl is not None:
+                        print(f" val: {val_losses[-1]:.3f}")
 
-            # save each epoch
-            model_fname = os.path.join(expt_dir, f"model_epoch_{ep}")
-            opt_fname = os.path.join(expt_dir, f"opt_epoch_{ep}")
-            torch.save(model.state_dict(), model_fname)
-            torch.save(optimizer.state_dict(), opt_fname)
+            if (save_step is not None) and (ep % save_step == 0):
+                model_fname = os.path.join(expt_dir, f"model_epoch_{ep}")
+                opt_fname = os.path.join(expt_dir, f"opt_epoch_{ep}")
+                torch.save(model.state_dict(), model_fname)
+                torch.save(optimizer.state_dict(), opt_fname)
+
+        model_fname = os.path.join(expt_dir, f"model_final_{ep}")
+        opt_fname = os.path.join(expt_dir, f"opt_final_{ep}")
+        torch.save(model.state_dict(), model_fname)
+        torch.save(optimizer.state_dict(), opt_fname)
     finally:
         tend = datetime.now()
-        expt_data = {'loss': losses, 'byte_samples': byte_samples, 'string_samples': string_samples, 
+        expt_data = {'loss': losses, 'val_losses': val_losses,'byte_samples': byte_samples, 'string_samples': string_samples, 
                     'entropies': entropies, 
                     'tstart': str(tstart), 'tend': str(tend),
                     **params}
