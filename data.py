@@ -127,12 +127,19 @@ class ByteDataset(Dataset):
 class ByteDataLoader(DataLoader):
     """Loads packed sequences of integer codes for each batch."""
 
-    def __init__(self, byte_ds, **kwargs):
+    def __init__(self, byte_ds, pack_onehot=False, **kwargs):
+        """pack_onehot: if True, the (seqln, num_codes) input tensors will be packed together into a torch PackedSequence object.
+            if False, they're left in a list.
+            """
+        self.pack_onehot = pack_onehot
+
         def collate(item_list):
             """item list: a list of (one_hot, int) seq tuples"""
-            packed_onehot = pack_sequence([t[0] for t in item_list], enforce_sorted=False)
+            onehot = [t[0] for t in item_list]
+            if self.pack_onehot:
+                onehot = pack_sequence(onehot, enforce_sorted=False)
             padded_ints = pad_sequence([t[1] for t in item_list])
-            return packed_onehot, padded_ints
+            return onehot, padded_ints
 
         super().__init__(byte_ds, collate_fn=collate, 
                                 **kwargs)

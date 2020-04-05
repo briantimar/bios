@@ -1,5 +1,6 @@
 import unittest
-from data import ByteCode
+import torch
+from data import ByteCode, ByteDataset, ByteDataLoader
 
 class TestByteCode(unittest.TestCase):
 
@@ -21,7 +22,18 @@ class TestByteCode(unittest.TestCase):
         not_a_byteval = -3
         self.assertEqual(bc._to_code(not_a_byteval), bc._byte_value_map[bc.MISSING])
 
+class TestDataLoader(unittest.TestCase):
 
+    def test_dl_formats(self):
+        bc = ByteCode("byte_values.txt")
+        ds = ByteDataset("_bios.json", bc)
+        dl = ByteDataLoader(ds, pack_onehot=False)
+        onehot, targets = next(iter(dl))
+        self.assertTrue(isinstance(onehot, list))
+
+        dl = ByteDataLoader(ds, pack_onehot=True)
+        onehot, targets = next(iter(dl))
+    
 
 if __name__ == "__main__":
     unittest.main()
