@@ -25,7 +25,7 @@ def score_set(model, dl, num_batch=None):
         for i in range(len(lengths)):
             loss[i, lengths[i]-1:] = 0
         loss = loss.sum(dim=1)
-        bpcs.append((loss.cpu() / lengths).mean().item())
+        bpcs.append((loss.cpu() / lengths.cpu()).mean().item())
         lps.append(loss.mean().item())
     return np.mean(lps), np.mean(bpcs)
 
@@ -56,6 +56,16 @@ def train(dataloader, model, optimizer, params, device,
     val_losses = []
     bpcs = []
     lossfn = nn.CrossEntropyLoss(reduction='none')
+
+    def log():
+        tend = datetime.now()
+        expt_data = {'loss': losses, 'val_losses': val_losses, 'bpcs': bpcs,
+                'byte_samples': byte_samples, 'string_samples': string_samples, 
+                    'entropies': entropies, 
+                    'tstart': str(tstart), 'tend': str(tend),
+                    **params}
+        with open(os.path.join(expt_dir, "expt_data"), 'w') as f:
+            json.dump(expt_data, f)
 
     try:
         for ep in range(epochs):
@@ -92,6 +102,7 @@ def train(dataloader, model, optimizer, params, device,
                     print(f"recent loss: {loss:.3f}")
                     if val_dl is not None:
                         print(f" val los: {val_losses[-1]:.3f}, bpc: {bpcs[-1]:.3f}")
+                    log()
 
             if (save_step is not None) and (ep % save_step == 0):
                 model_fname = os.path.join(expt_dir, f"model_epoch_{ep}")
@@ -104,14 +115,7 @@ def train(dataloader, model, optimizer, params, device,
         torch.save(model.state_dict(), model_fname)
         torch.save(optimizer.state_dict(), opt_fname)
     finally:
-        tend = datetime.now()
-        expt_data = {'loss': losses, 'val_losses': val_losses, 'bpcs': bpcs,
-                'byte_samples': byte_samples, 'string_samples': string_samples, 
-                    'entropies': entropies, 
-                    'tstart': str(tstart), 'tend': str(tend),
-                    **params}
-        with open(os.path.join(expt_dir, "expt_data"), 'w') as f:
-            json.dump(expt_data, f)
+        log()
         
     
 
