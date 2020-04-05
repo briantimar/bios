@@ -15,6 +15,7 @@ def score_set(model, dl, num_batch=None):
     if num_batch is None:
         num_batch = len(dl)
     lps = []
+    bpcs = []
     lossfn = nn.CrossEntropyLoss(reduction='none')
     model.eval()
     for ib, (onehot, target) in enumerate(dl):
@@ -23,9 +24,10 @@ def score_set(model, dl, num_batch=None):
         loss = lossfn(logits[...,:-1], target[...,1:])
         for i in range(len(lengths)):
             loss[i, lengths[i]-1:] = 0
-        loss = loss.sum(dim=1).mean().item()
-        lps.append(loss)
-    return np.mean(lps)
+        loss = loss.sum(dim=1)
+        bpcs.append((loss.cpu() / lengths).mean().item())
+        lps.append(loss.mean().item())
+    return np.mean(lps), np.mean(bpcs)
 
 
 def train(dataloader, model, optimizer, params, device, 
@@ -52,6 +54,7 @@ def train(dataloader, model, optimizer, params, device,
     entropies = []
     losses = []
     val_losses = []
+    bpcs = []
     lossfn = nn.CrossEntropyLoss(reduction='none')
 
     try:
@@ -82,11 +85,13 @@ def train(dataloader, model, optimizer, params, device,
                     probabilities.append(probs)
                     entropies.append(entropy)
                     if val_dl is not None:
-                        val_losses.append(score_set(model, val_dl, num_batch=num_val_batch))
+                        logprob, bpc = score_set(model, val_dl, num_batch=num_val_batch)
+                        val_losses.append(logprob)
+                        bpcs.append(bpc)
                     print(f"Step {batch_index}, sample: {str_sample}")
                     print(f"recent loss: {loss:.3f}")
                     if val_dl is not None:
-                        print(f" val: {val_losses[-1]:.3f}")
+                        print(f" val los: {val_losses[-1]:.3f}, bpc: {bpcs[-1]:.3f}")
 
             if (save_step is not None) and (ep % save_step == 0):
                 model_fname = os.path.join(expt_dir, f"model_epoch_{ep}")
@@ -100,7 +105,8 @@ def train(dataloader, model, optimizer, params, device,
         torch.save(optimizer.state_dict(), opt_fname)
     finally:
         tend = datetime.now()
-        expt_data = {'loss': losses, 'val_losses': val_losses,'byte_samples': byte_samples, 'string_samples': string_samples, 
+        expt_data = {'loss': losses, 'val_losses': val_losses, 'bpcs': bpcs,
+                'byte_samples': byte_samples, 'string_samples': string_samples, 
                     'entropies': entropies, 
                     'tstart': str(tstart), 'tend': str(tend),
                     **params}
