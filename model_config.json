@@ -1,0 +1,7 @@
+{
+    "num_layers": 4, 
+    "hidden_size": 512, 
+    "dropout": 0.5, 
+    "input_size": 206, 
+    "stop_token": 205
+}

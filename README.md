@@ -11,3 +11,12 @@ Code for byte-level learning of twitter bios (full training set is in a JSON on 
 ```train.py``` - routines used to train the model 
 
 ```profiles.py``` - used to build the training set.
+
+## Usage
+
+```sample.py``` is a script for sampling strings from a trained model file, printing to stdout. See command
+line help for details. Requires a local copy of a model file (such as that from the link above) plus a model config file and byte values config file; these are available in this repo for the trained model above as ```model_config.json``` and ```byte_values.txt``` respectively.
+
+Example: ```python sample.py model_file -N 5``` prints 5 samples from the model.
+
+Sampling is quite slow on my laptop - GPU will be used automatically if available.
